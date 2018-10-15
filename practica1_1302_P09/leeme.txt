@@ -1,0 +1,25 @@
+Autores: Lucía Rivas Molina <lucia.rivasmolina@estudiante.uam.es>
+         Daniel Santo-Tomás López <danie.santo-tomas@estudiante.uam.es>
+
+1. Normativa de entrega cumplida en su totalidad: Realizado. Todo entregado en el formato pedido.
+2. Contar paquetes de una traza: Realizado. En la captura se puede observar que tanto wireshark
+   como la terminal muestran el mismo número de paquetes.
+3. Contar paquetes de la interfaz de red: Realizado. Cuando introduces la traza a analizar también cuenta
+   el número de paquetes que contiene.
+4. Almacenar en una traza el tráfico capturado en vivo: Realizado. Al capturar de una traza se genera un .pcap
+   donde se guarda, hemos adjuntado el .pcap pedido como muestra (el de 15 bytes).
+5. Modificar fecha correctamente: Realizado. En la captura se observa que la hora de la terminal y de Wireshark
+   difieren media hora respecto de la del ordenador.
+6. Imprimir los N primeros bytes de un paquete y validarlo con Wireshark (captura de pantalla): Realizado.
+   Se imprimen correctamente solamente los N primeros bytes, a menos que la cabecera sea más pequeña, en
+   cuyo caso se imprimen los de la cabecera. Esto segundo nunca pasará pues al hacer el pcap_opne_live declaramos que 
+   capture los N primeros bytes.
+7. Cuestionario "Ejercicios de captura de tráfico": Realizado. Entregado en el pdf adjunto.
+8. Uso de un único "flujo" para traza e interfaz: Realizado. Solamente difieren en el open del descriptor.
+
+Hemos adjuntado una captura que prueba:
+   - La hora del sistema es las 23:03 mientras que la de la terminal y la de wireshark es media
+     hora más tarde (más dos minutos pues es lo que tardamos en hacer la captura).
+   - La terminal indica que ha capturado 299 paquetes y el último paquete de wireshark es el 299.
+   - La cabecera del paquete número 299 coincide tanto en la terminal como en la de wireshark, siendo esta de 15 bytes,
+     lo cual prueba que para más de 15 bytes funciona.
