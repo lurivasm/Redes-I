@@ -19,8 +19,7 @@ uint16_t dport_filter = NO_FILTER;
 */
 void handleSignal(int nsignal)
 {
-	(void) nsignal; // indicamos al compilador que no nos importa que nsignal no se utilice
-
+	(void) nsignal;
 	printf("Control C pulsado\n");
 	pcap_breakloop(descr);
 }
@@ -57,38 +56,35 @@ int main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	//Simple lectura por parametros por completar casos de error, ojo no cumple 100% los requisitos del enunciado!
+	/*Tomamos los argumentos*/
 	while ((opt = getopt_long_only(argc, argv, "f:i:1:2:3:4:5", options, &long_index)) != -1) {
 		switch (opt) {
+		/*Pasamos la interfaz*/
 		case 'i' :
-			if(descr) { // comprobamos que no se ha abierto ninguna otra interfaz o fichero
+			if(descr) { /* comprobamos que no se ha abierto ninguna otra interfaz o fichero*/
 				printf("Ha seleccionado más de una fuente de datos\n");
 				pcap_close(descr);
 				exit(ERROR);
 			}
-			printf("Descomente el código para leer y abrir de una interfaz\n");
-			exit(ERROR);
 
-
-			//if ( (descr = ??(optarg, ??, ??, ??, errbuf)) == NULL){
-			//	perror(errbuf);
-			//	exit(ERROR);
-			//}
+			/*if ( (descr = ??(optarg, ??, ??, ??, errbuf)) == NULL){
+				perror(errbuf);
+				exit(ERROR);
+			}*/
 			break;
 
+		/*Pasamos el pcap*/
 		case 'f' :
-			if(descr) { // comprobamos que no se ha abierto ninguna otra interfaz o fichero
+			if(descr) {
 				printf("Ha seleccionado más de una fuente de datos\n");
 				pcap_close(descr);
 				exit(ERROR);
 			}
-			printf("Descomente el código para leer y abrir una traza pcap\n");
-			exit(ERROR);
 
-			//if ((descr = pcap_open_offline(optarg, errbuf)) == NULL) {
-			//	perror(errbuf);
-			//	exit(ERROR);
-			//}
+			if ((descr = pcap_open_offline(optarg, errbuf)) == NULL) {
+				perror(errbuf);
+				exit(ERROR);
+			}
 
 			break;
 
@@ -159,7 +155,7 @@ int main(int argc, char **argv)
 
 	printf("\n\n");
 
-	retorno = pcap_loop(descr,NO_LIMIT,analizar_paquete,NULL);
+	retorno = pcap_loop(descr, NO_LIMIT, analizar_paquete, NULL);
 	switch(retorno)	{
 		case OK:
 			printf("Traza leída\n");
@@ -184,7 +180,11 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	printf("Nuevo paquete capturado el %s\n", ctime((const time_t *) & (hdr->ts.tv_sec)));
 	contador++;
 	int i = 0;
-	printf("Direccion ETH destino= ");
+	const uint8_t tipo_eth[2] = {8, 0};
+	int ip_longitud[2] = {0, 0};
+
+	/*Imprimimos la cabecera ethernet*/
+	printf("Direccion ETH destino = ");
 	printf("%02X", pack[0]);
 
 	for (i = 1; i < ETH_ALEN; i++) {
@@ -203,15 +203,42 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 
 	printf("\n");
 
-	pack+=ETH_ALEN;
+	pack += ETH_ALEN;
 
 	printf("TIPO ETHERNET = ");
 	for (i = 0; i < ETH_TLEN; i++) {
 		printf("%02X", pack[i]);
 	}
-	// .....
-	// .....
-	// .....
+	printf("\n");
+	/*Comprobamos que el protocolo es el IPv4*/
+	for(i = 0; i < ETH_TLEN; i++) {
+		if(pack[i] != tipo_eth[i]){
+			printf("No es el protocolo esperado\n");
+			return;
+		}
+	}
+
+	pack += ETH_TLEN;
+
+	/*Imprimimos la cabecera IP*/
+	printf("VERSION IP = ");
+	printf("%d", (pack[0]&(0xF0)) >> 4);
+	printf("\n");
+	printf("TAMAÑO CABECERA = ");
+	printf("%d", (pack[0]&(0x0F)));
+	printf("\n");
+
+	pack += 2;
+
+	printf("LONGITUD TOTAL = ");
+	for(i = 0; i < 2; i++){
+		ip_longitud[i] = pack[i];
+	}
+	printf("%d\n", (ip_longitud[0] << 4) + ip_longitud[1]);
+
+	pack += 4;
+	printf("DESPLAZAMIENTO = ");
+	printf("%d\n", (pack[0]&(0x1F)));
 
 	printf("\n\n");
 
