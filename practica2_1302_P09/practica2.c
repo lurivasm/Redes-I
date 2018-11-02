@@ -179,9 +179,11 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	(void)user;
 	printf("Nuevo paquete capturado el %s\n", ctime((const time_t *) & (hdr->ts.tv_sec)));
 	contador++;
-	int i = 0;
+	int i = 0, desp, protocolo, tam_ip;
 	const uint8_t tipo_eth[2] = {8, 0};
 	int ip_longitud[2] = {0, 0};
+	int puerto[2] = {0, 0};
+	int offset[2] = {0, 0};
 
 	/*Imprimimos la cabecera ethernet*/
 	printf("Direccion ETH destino = ");
@@ -213,7 +215,7 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	/*Comprobamos que el protocolo es el IPv4*/
 	for(i = 0; i < ETH_TLEN; i++) {
 		if(pack[i] != tipo_eth[i]){
-			printf("No es el protocolo esperado\n");
+			printf("No es el protocolo esperado\n\n");
 			return;
 		}
 	}
@@ -225,7 +227,8 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	printf("%d", (pack[0]&(0xF0)) >> 4);
 	printf("\n");
 	printf("TAMAÑO CABECERA = ");
-	printf("%d", (pack[0]&(0x0F)));
+	printf("%d", (pack[0]&(0x0F))*4); /*Por 4 palabras por fila*/
+	tam_ip = (pack[0]&(0x0F));
 	printf("\n");
 
 	pack += 2;
@@ -234,11 +237,101 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	for(i = 0; i < 2; i++){
 		ip_longitud[i] = pack[i];
 	}
-	printf("%d\n", (ip_longitud[0] << 4) + ip_longitud[1]);
+	printf("%d\n", (ip_longitud[0] << 8) + ip_longitud[1]);
 
 	pack += 4;
 	printf("DESPLAZAMIENTO = ");
-	printf("%d\n", (pack[0]&(0x1F)));
+	for(i = 0; i < 2; i++){
+		offset[i] = pack[i];
+	}
+	desp = (((offset[0] & 0x1) << 8) + (offset[1]));
+	printf("%d\n", desp*8);
+
+	pack += 2;
+	printf("TIEMPO DE VIDA = ");
+	printf("%d\n", pack[0]);
+
+	pack += 1;
+	printf("PROTOCOLO = ");
+	printf("%d\n", pack[0]);
+	protocolo = pack[0];
+
+	pack += 3;
+	printf("DIRECCION ORIGEN =");
+	printf(" %d", pack[0]);
+	for(i = 1; i < 4; i++){
+		printf(".%d", pack[i]);
+	}
+	printf("\n");
+
+	pack += 4;
+	printf("DIRECCION DESTINO =");
+	printf(" %d", pack[0]);
+	for(i = 1; i < 4; i++){
+		printf(".%d", pack[i]);
+	}
+	printf("\n");
+
+	/*Comprobamos que sea distinto de 0*/
+	if(desp != 0){
+		printf("El desplazamiento no es 0\n\n");
+		return;
+	}
+	/*Comprobamos que el protocolo sea UDP o TCP*/
+	if(protocolo != 6 && protocolo != 17){
+		printf("El protocolo no es UDP ni TCP\n\n");
+		return;
+	}
+	/*Si ihl es mayor que 5 hay que sumar 4 bytes mas por el campo opciones*/
+	if(tam_ip > 5){
+		pack += 8;
+	}
+	else{
+		pack += 4;
+	}
+
+	/*Imprimimos la cabecera TCP*/
+	if(protocolo == 6){
+		printf("PUERTO ORIGEN = ");;
+		for(i = 0; i < 2; i++){
+			puerto[i] = pack[i];
+		}
+		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+
+		pack += 2;
+		printf("PUERTO DESTINO = ");;
+		for(i = 0; i < 2; i++){
+			puerto[i] = pack[i];
+		}
+		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+
+		pack += 11;
+		printf("SYN = %d\n", pack[0]&0x02 >> 1);
+		printf("SYN = %d\n", pack[0]&0x01);
+	}
+
+	/*Impimimos la cabecera UDP*/
+	else if(protocolo == 17){
+		printf("PUERTO ORIGEN = ");;
+		for(i = 0; i < 2; i++){
+			puerto[i] = pack[i];
+		}
+		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+
+		pack += 2;
+		printf("PUERTO DESTINO = ");;
+		for(i = 0; i < 2; i++){
+			puerto[i] = pack[i];
+		}
+		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+
+		pack += 2;
+		printf("LONGITUD = ");;
+		for(i = 0; i < 2; i++){
+			puerto[i] = pack[i];
+		}
+		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+	}
 
 	printf("\n\n");
 
