@@ -9,10 +9,10 @@
 /*Variables Globales*/
 pcap_t *descr = NULL;
 uint64_t contador = 0;
-uint8_t ipsrc_filter[IP_ALEN] = {NO_FILTER};
-uint8_t ipdst_filter[IP_ALEN] = {NO_FILTER};
-uint16_t sport_filter= NO_FILTER;
-uint16_t dport_filter = NO_FILTER;
+uint8_t ipsrc_filter[IP_ALEN] = {NO_FILTER}; /*Ip origen*/
+uint8_t ipdst_filter[IP_ALEN] = {NO_FILTER}; /*Ip destino*/
+uint16_t sport_filter= NO_FILTER;            /*Puerto origen*/
+uint16_t dport_filter = NO_FILTER;           /*Puerto destino*/
 
 /**
 * Handle de la sennal SIGINT
@@ -67,10 +67,10 @@ int main(int argc, char **argv)
 				exit(ERROR);
 			}
 
-			/*if ( (descr = ??(optarg, ??, ??, ??, errbuf)) == NULL){
+			if ((descr = pcap_open_live(optarg, 5, 0, 100, errbuf)) == NULL) {
 				perror(errbuf);
 				exit(ERROR);
-			}*/
+			}
 			break;
 
 		/*Pasamos el pcap*/
@@ -138,14 +138,15 @@ int main(int argc, char **argv)
 		return ERROR;
 	}
 
-	//Simple comprobacion de la correcion de la lectura de parametros
+	/*Simple comprobacion de la correcion de la lectura de parametros*/
 	printf("Filtro:");
-	//if(ipsrc_filter[0]!=0)
-	printf("ipsrc_filter:%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\t", ipsrc_filter[0], ipsrc_filter[1], ipsrc_filter[2], ipsrc_filter[3]);
-	//if(ipdst_filter[0]!=0)
-	printf("ipdst_filter:%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\t", ipdst_filter[0], ipdst_filter[1], ipdst_filter[2], ipdst_filter[3]);
-
-	if (sport_filter!= NO_FILTER) {
+	if(ipsrc_filter[0] != NO_FILTER){
+		printf("ipsrc_filter:%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\t", ipsrc_filter[0], ipsrc_filter[1], ipsrc_filter[2], ipsrc_filter[3]);
+  }
+  if(ipdst_filter[0] != NO_FILTER){
+		printf("ipdst_filter:%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"\t", ipdst_filter[0], ipdst_filter[1], ipdst_filter[2], ipdst_filter[3]);
+	}
+	if (sport_filter != NO_FILTER) {
 		printf("po_filtro=%"PRIu16"\t", sport_filter);
 	}
 
@@ -264,6 +265,16 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	}
 	printf("\n");
 
+	/*Comprobamos que la ip origen es la del filtro*/
+	if(ipsrc_filter[0] != NO_FILTER){
+			for(i = 0; i < 4; i++){
+				if(ipsrc_filter[i] != pack[i]){
+					printf("No se cumple el filtro IPO\n\n");
+					return;
+				}
+			}
+	}
+
 	pack += 4;
 	printf("DIRECCION DESTINO =");
 	printf(" %d", pack[0]);
@@ -271,6 +282,16 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 		printf(".%d", pack[i]);
 	}
 	printf("\n");
+
+	/*Comprobamos que la ip destino es la del filtro*/
+	if(ipdst_filter[0] != NO_FILTER){
+			for(i = 0; i < 4; i++){
+				if(ipdst_filter[i] != pack[i]){
+					printf("No se cumple el filtro IPD\n\n");
+					return;
+				}
+			}
+	}
 
 	/*Comprobamos que sea distinto de 0*/
 	if(desp != 0){
@@ -297,6 +318,11 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 			puerto[i] = pack[i];
 		}
 		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+		/*Comprobamos que el filtro puerto origen se cumple*/
+		if(sport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != sport_filter){
+			printf("No se cumple el filtro PO\n\n");
+			return;
+		}
 
 		pack += 2;
 		printf("PUERTO DESTINO = ");;
@@ -304,10 +330,15 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 			puerto[i] = pack[i];
 		}
 		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+		/*Comprobamos que el filtro puerto destino se cumple*/
+		if(dport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != dport_filter){
+			printf("No se cumple el filtro PD\n\n");
+			return;
+		}
 
 		pack += 11;
 		printf("SYN = %d\n", pack[0]&0x02 >> 1);
-		printf("SYN = %d\n", pack[0]&0x01);
+		printf("FYN = %d\n", pack[0]&0x01);
 	}
 
 	/*Impimimos la cabecera UDP*/
@@ -317,6 +348,11 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 			puerto[i] = pack[i];
 		}
 		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+		/*Comprobamos que el filtro puerto origen se cumple*/
+		if(sport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != sport_filter){
+			printf("No se cumple el filtro PO\n\n");
+			return;
+		}
 
 		pack += 2;
 		printf("PUERTO DESTINO = ");;
@@ -324,6 +360,11 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 			puerto[i] = pack[i];
 		}
 		printf("%d\n", (puerto[0] << 8) + puerto[1]);
+		/*Comprobamos que el filtro puerto destino se cumple*/
+		if(dport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != dport_filter){
+			printf("No se cumple el filtro PD\n\n");
+			return;
+		}
 
 		pack += 2;
 		printf("LONGITUD = ");;

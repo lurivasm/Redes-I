@@ -1,0 +1,7 @@
+Normativa de entrega cumplida en su totalidad: Realizado: Varias relecturas del enunciado.
+Contar paquetes de una traza: Realizado: Se ha comprobado que el número de paquete que muestra nuestro programa coincide con el que indica Wireshark.
+Contar paquetes de la interfaz de red: No-Realizado.
+Almacenar en una traza el tráfico capturado en vivo: Realizado: Se ha comprobado que todos los bytes de la traza capturado coincide con lo que indica Wireshark en un conjunto diverso de paquetes.
+Modificar fecha correctamente: No-Realizado.
+Imprimir los N primeros bytes de un paquete y validarlo con Wireshark (captura de pantalla): Parcialmente-Realizado: Se imprimen correctamente solamente los 5 primeros bytes.
+Cuestionario "Ejercicios de captura de tráfico": No-Realizado.
