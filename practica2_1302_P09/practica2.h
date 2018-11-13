@@ -36,3 +36,7 @@
 void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t *pack);
 
 void handleSignal(int nsignal);
+
+int analizar_udp(const uint8_t *pack);
+
+int analizar_tcp(const uint8_t *pack);

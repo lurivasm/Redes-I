@@ -14,15 +14,6 @@ uint8_t ipdst_filter[IP_ALEN] = {NO_FILTER}; /*Ip destino*/
 uint16_t sport_filter= NO_FILTER;            /*Puerto origen*/
 uint16_t dport_filter = NO_FILTER;           /*Puerto destino*/
 
-/**
-* Handle de la sennal SIGINT
-*/
-void handleSignal(int nsignal)
-{
-	(void) nsignal;
-	printf("Control C pulsado\n");
-	pcap_breakloop(descr);
-}
 
 /**
 * Main de la practica
@@ -45,6 +36,12 @@ int main(int argc, char **argv)
 		exit(ERROR);
 	}
 
+	if (argc > 11){
+		printf("No puedes poner tantos parámetros\n");
+		printf("Ejecucion: %s <-f traza.pcap / -i eth0> [-ipo IPO] [-ipd IPD] [-po PO] [-pd PD]\n", argv[0]);
+		exit(ERROR);
+	}
+
 	static struct option options[] = {
 		{"f", required_argument, 0, 'f'},
 		{"i",required_argument, 0,'i'},
@@ -62,7 +59,7 @@ int main(int argc, char **argv)
 		/*Pasamos la interfaz*/
 		case 'i' :
 			if(descr) { /* comprobamos que no se ha abierto ninguna otra interfaz o fichero*/
-				printf("Ha seleccionado más de una fuente de datos\n");
+				printf("Ha seleccionado más de una fuente de datos\nNo admite -f y -i simultáneamente\n");
 				pcap_close(descr);
 				exit(ERROR);
 			}
@@ -76,7 +73,7 @@ int main(int argc, char **argv)
 		/*Pasamos el pcap*/
 		case 'f' :
 			if(descr) {
-				printf("Ha seleccionado más de una fuente de datos\n");
+				printf("Ha seleccionado más de una fuente de datos\nNo admite -f y -i simultáneamente\n");
 				pcap_close(descr);
 				exit(ERROR);
 			}
@@ -89,32 +86,52 @@ int main(int argc, char **argv)
 			break;
 
 		case '1' :
+			if(ipsrc_filter[0] != NO_FILTER){
+				printf("No puedes poner dos filtros para -ipo\n");
+				exit(ERROR);
+			}
 			if (sscanf(optarg, "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8"", &(ipsrc_filter[0]), &(ipsrc_filter[1]), &(ipsrc_filter[2]), &(ipsrc_filter[3])) != IP_ALEN) {
 				printf("Error ipo_filtro. Ejecucion: %s /ruta/captura_pcap [-ipo IPO] [-ipd IPD] [-po PO] [-pd PD]: %d\n", argv[0], argc);
+				printf("Debe ejecutar la ip origen como : -ipo X.X.X.X\n");
 				exit(ERROR);
 			}
 
 			break;
 
 		case '2' :
+			if(ipdst_filter[0] != NO_FILTER){
+				printf("No puedes poner dos filtros para -ipd\n");
+				exit(ERROR);
+			}
 			if (sscanf(optarg, "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8"", &(ipdst_filter[0]), &(ipdst_filter[1]), &(ipdst_filter[2]), &(ipdst_filter[3])) != IP_ALEN) {
 				printf("Error ipd_filtro. Ejecucion: %s /ruta/captura_pcap [-ipo IPO] [-ipd IPD] [-po PO] [-pd PD]: %d\n", argv[0], argc);
+				printf("Debe ejecutar la ip destino como : -ipd X.X.X.X\n");
 				exit(ERROR);
 			}
 
 			break;
 
 		case '3' :
+			if(sport_filter != NO_FILTER){
+				printf("No puedes poner dos filtros para -po\n");
+				exit(ERROR);
+			}
 			if ((sport_filter= atoi(optarg)) == 0) {
 				printf("Error po_filtro.Ejecucion: %s /ruta/captura_pcap [-ipo IPO] [-ipd IPD] [-po PO] [-pd PD]: %d\n", argv[0], argc);
+				printf("Debe ejecutar el puerto origen como : -po X\n");
 				exit(ERROR);
 			}
 
 			break;
 
 		case '4' :
+			if(dport_filter != NO_FILTER){
+				printf("No puedes poner dos filtros para -pd\n");
+				exit(ERROR);
+			}
 			if ((dport_filter = atoi(optarg)) == 0) {
 				printf("Error pd_filtro. Ejecucion: %s /ruta/captura_pcap [-ipo IPO] [-ipd IPD] [-po PO] [-pd PD]: %d\n", argv[0], argc);
+				printf("Debe ejecutar el puerto destino como : -pd X\n");
 				exit(ERROR);
 			}
 
@@ -183,7 +200,6 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	int i = 0, desp, protocolo, tam_ip;
 	const uint8_t tipo_eth[2] = {8, 0};
 	int ip_longitud[2] = {0, 0};
-	int puerto[2] = {0, 0};
 	int offset[2] = {0, 0};
 
 	/*Imprimimos la cabecera ethernet*/
@@ -216,7 +232,7 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	/*Comprobamos que el protocolo es el IPv4*/
 	for(i = 0; i < ETH_TLEN; i++) {
 		if(pack[i] != tipo_eth[i]){
-			printf("No es el protocolo esperado\n\n");
+			printf("No es el protocolo esperado (IPv4)\n\n");
 			return;
 		}
 	}
@@ -254,7 +270,16 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 
 	pack += 1;
 	printf("PROTOCOLO = ");
-	printf("%d\n", pack[0]);
+	if(pack[0] == 17){
+		printf("%d (UDP)\n", pack[0]);
+	}
+	else if(pack[0] == 6){
+		printf("%d (TCP)\n", pack[0]);
+	}
+	else{
+		printf("%d\n", pack[0]);
+	}
+
 	protocolo = pack[0];
 
 	pack += 3;
@@ -269,7 +294,7 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	if(ipsrc_filter[0] != NO_FILTER){
 			for(i = 0; i < 4; i++){
 				if(ipsrc_filter[i] != pack[i]){
-					printf("No se cumple el filtro IPO\n\n");
+					printf("No se cumple el filtro IPOrigen\n\n");
 					return;
 				}
 			}
@@ -287,7 +312,7 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 	if(ipdst_filter[0] != NO_FILTER){
 			for(i = 0; i < 4; i++){
 				if(ipdst_filter[i] != pack[i]){
-					printf("No se cumple el filtro IPD\n\n");
+					printf("No se cumple el filtro IPDestino\n\n");
 					return;
 				}
 			}
@@ -295,7 +320,7 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 
 	/*Comprobamos que sea distinto de 0*/
 	if(desp != 0){
-		printf("El desplazamiento no es 0\n\n");
+		printf("El desplazamiento no es 0, no es el primer fragmento\n\n");
 		return;
 	}
 	/*Comprobamos que el protocolo sea UDP o TCP*/
@@ -313,67 +338,104 @@ void analizar_paquete(u_char *user,const struct pcap_pkthdr *hdr, const uint8_t 
 
 	/*Imprimimos la cabecera TCP*/
 	if(protocolo == 6){
-		printf("PUERTO ORIGEN = ");;
-		for(i = 0; i < 2; i++){
-			puerto[i] = pack[i];
-		}
-		printf("%d\n", (puerto[0] << 8) + puerto[1]);
-		/*Comprobamos que el filtro puerto origen se cumple*/
-		if(sport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != sport_filter){
-			printf("No se cumple el filtro PO\n\n");
+		if(analizar_tcp(pack) == ERROR){
 			return;
 		}
-
-		pack += 2;
-		printf("PUERTO DESTINO = ");;
-		for(i = 0; i < 2; i++){
-			puerto[i] = pack[i];
-		}
-		printf("%d\n", (puerto[0] << 8) + puerto[1]);
-		/*Comprobamos que el filtro puerto destino se cumple*/
-		if(dport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != dport_filter){
-			printf("No se cumple el filtro PD\n\n");
-			return;
-		}
-
-		pack += 11;
-		printf("SYN = %d\n", pack[0]&0x02 >> 1);
-		printf("FYN = %d\n", pack[0]&0x01);
 	}
 
 	/*Impimimos la cabecera UDP*/
 	else if(protocolo == 17){
-		printf("PUERTO ORIGEN = ");;
-		for(i = 0; i < 2; i++){
-			puerto[i] = pack[i];
-		}
-		printf("%d\n", (puerto[0] << 8) + puerto[1]);
-		/*Comprobamos que el filtro puerto origen se cumple*/
-		if(sport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != sport_filter){
-			printf("No se cumple el filtro PO\n\n");
+		if(analizar_udp(pack) == ERROR){
 			return;
 		}
-
-		pack += 2;
-		printf("PUERTO DESTINO = ");;
-		for(i = 0; i < 2; i++){
-			puerto[i] = pack[i];
-		}
-		printf("%d\n", (puerto[0] << 8) + puerto[1]);
-		/*Comprobamos que el filtro puerto destino se cumple*/
-		if(dport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != dport_filter){
-			printf("No se cumple el filtro PD\n\n");
-			return;
-		}
-
-		pack += 2;
-		printf("LONGITUD = ");;
-		for(i = 0; i < 2; i++){
-			puerto[i] = pack[i];
-		}
-		printf("%d\n", (puerto[0] << 8) + puerto[1]);
 	}
 
 	printf("\n\n");
+	return;
+}
 
+/**
+* Función para analizar los protocolos TCP
+*/
+int analizar_tcp(const uint8_t *pack){
+	int puerto[2] = {0, 0};
+	int i;
+
+	printf("PUERTO ORIGEN = ");;
+	for(i = 0; i < 2; i++){
+		puerto[i] = pack[i];
+	}
+	printf("%d\n", (puerto[0] << 8) + puerto[1]);
+	/*Comprobamos que el filtro puerto origen se cumple*/
+	if(sport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != sport_filter){
+		printf("No se cumple el filtro POrigen\n\n");
+		return ERROR;
+	}
+
+	pack += 2;
+	printf("PUERTO DESTINO = ");;
+	for(i = 0; i < 2; i++){
+		puerto[i] = pack[i];
+	}
+	printf("%d\n", (puerto[0] << 8) + puerto[1]);
+	/*Comprobamos que el filtro puerto destino se cumple*/
+	if(dport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != dport_filter){
+		printf("No se cumple el filtro PDestino\n\n");
+		return ERROR;
+	}
+
+	pack += 11;
+	printf("SYN = %d\n", pack[0]&0x02 >> 1);
+	printf("FYN = %d\n", pack[0]&0x01);
+	return OK;
+}
+
+/**
+* Función para analizar los protocolos UDP
+*/
+int analizar_udp(const uint8_t *pack){
+	int puerto[2] = {0, 0};
+	int i;
+
+	printf("PUERTO ORIGEN = ");;
+	for(i = 0; i < 2; i++){
+		puerto[i] = pack[i];
+	}
+	printf("%d\n", (puerto[0] << 8) + puerto[1]);
+	/*Comprobamos que el filtro puerto origen se cumple*/
+	if(sport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != sport_filter){
+		printf("No se cumple el filtro POrigen\n\n");
+		return ERROR;
+	}
+
+	pack += 2;
+	printf("PUERTO DESTINO = ");;
+	for(i = 0; i < 2; i++){
+		puerto[i] = pack[i];
+	}
+	printf("%d\n", (puerto[0] << 8) + puerto[1]);
+	/*Comprobamos que el filtro puerto destino se cumple*/
+	if(dport_filter != NO_FILTER && ((puerto[0] << 8) + puerto[1]) != dport_filter){
+		printf("No se cumple el filtro PDestino\n\n");
+		return ERROR;
+	}
+
+	pack += 2;
+	printf("LONGITUD = ");;
+	for(i = 0; i < 2; i++){
+		puerto[i] = pack[i];
+	}
+	printf("%d\n", (puerto[0] << 8) + puerto[1]);
+
+	return OK;
+}
+
+/**
+* Handle de la sennal SIGINT
+*/
+void handleSignal(int nsignal)
+{
+	(void) nsignal;
+	printf("Control C pulsado\n");
+	pcap_breakloop(descr);
 }

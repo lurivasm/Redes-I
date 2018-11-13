@@ -1,7 +1,15 @@
-Normativa de entrega cumplida en su totalidad: Realizado: Varias relecturas del enunciado.
-Contar paquetes de una traza: Realizado: Se ha comprobado que el número de paquete que muestra nuestro programa coincide con el que indica Wireshark.
-Contar paquetes de la interfaz de red: No-Realizado.
-Almacenar en una traza el tráfico capturado en vivo: Realizado: Se ha comprobado que todos los bytes de la traza capturado coincide con lo que indica Wireshark en un conjunto diverso de paquetes.
-Modificar fecha correctamente: No-Realizado.
-Imprimir los N primeros bytes de un paquete y validarlo con Wireshark (captura de pantalla): Parcialmente-Realizado: Se imprimen correctamente solamente los 5 primeros bytes.
-Cuestionario "Ejercicios de captura de tráfico": No-Realizado.
+AUTORES:
+  Lucía Rivas Molina, lucia.rivasmolina@estudiante.uam.es
+  Daniel Santo-Tomás López. daniel.santo-tomas@estudiante.uam.es
+
+1. Normativa de entrega cumplida en su totalidad: Realizado. Todo entregado en el formato pedido.
+2. Contar paquetes de una traza: Realizado. Tanto wireshark como la terminal muestran el mismo número de paquetes.
+3. Contar paquetes de la interfaz de red: Realizado. Cuando introduces la traza a analizar también cuenta
+   el número de paquetes que contiene.
+4. Almacenar en una traza el tráfico capturado en vivo: Realizado. Al capturar de una traza se genera un .pcap
+   donde se guarda.
+5. Información de los niveles: Realizado. Imprime correctamente la información de todos los niveles.
+6. Tráfico filtrado: Realizado. Solo imprime los protocolos IP, UDP y TCP.
+7. Campo desplazamiento/offset: Realizado. Si el offset no es 0, no continía imprimiendo el siguiente nivel.
+8. Filtro de paquetes: Realizado. Si no hay argumentos imprime la ayuda, si hay -f y -i simultáneamente no se ejecuta y finalmente,
+  imprime bien los filtros sin importar el orden.
