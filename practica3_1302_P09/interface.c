@@ -44,7 +44,7 @@ uint8_t solicitudARP(char* interface, uint8_t* IP, uint8_t* retorno){
 		return ERROR;
 	pclose(f);
 	if(sscanf(linea,"%*s %*s %*s %*s [%s %*s\n",ETH_destino_aux)<1){
-		printf("Error ejecutando el comando: %s\n",comando);
+		printf("Error 2 ejecutando el comando: %s\n",comando);
 		return ERROR;
 	}
 	ETH_destino_aux[strlen((char*)ETH_destino_aux)-1]=0;

@@ -15,11 +15,11 @@ Compila con warning pues falta usar variables y modificar funciones
 #include "practica3.h"
 
 /***************************Variables globales utiles*************************************************/
-pcap_t* descr, *descr2; //Descriptores de la interface de red
-pcap_dumper_t * pdumper;//y salida a pcap
-uint64_t cont = 0;	//Contador numero de mensajes enviados
-char interface[10];	//Interface donde transmitir por ejemplo "eth0"
-uint16_t ID = 1;		//Identificador IP
+pcap_t *descr, *descr2; /*Descriptores de la interface de red*/
+pcap_dumper_t * pdumper;/*y salida a pcap*/
+uint64_t cont = 0;	/*Contador numero de mensajes enviados*/
+char interface[10];	/*Interface donde transmitir por ejemplo "eth0"*/
+uint16_t ID = 1;		/*Identificador IP*/
 
 
 void handleSignal(int nsignal){
@@ -36,13 +36,14 @@ int main(int argc, char **argv){
 	uint16_t MTU;
 	uint16_t datalink;
 	uint16_t puerto_destino;
-	char data[IP_DATAGRAM_MAX];
+	char data[IP_DATAGRAM_MAX], aux[IP_DATAGRAM_MAX];
 	uint16_t pila_protocolos[CADENAS];
 
 
 	int long_index = 0;
 	char opt;
 	char flag_iface = 0, flag_ip = 0, flag_port = 0, flag_file = 0, flag_dontfrag = 0, flag_mostrar = 0;
+	FILE *file = NULL;
 
 	static struct option options[] = {
 		{"if",required_argument,0,'1'},
@@ -55,21 +56,22 @@ int main(int argc, char **argv){
 		{0,0,0,0}
 	};
 
-		//Dos opciones: leer de stdin o de fichero, adicionalmente para pruebas si no se introduce argumento se considera que el mensaje es "Payload "
+		/*Dos opciones: leer de stdin o de fichero, adicionalmente para pruebas si no se
+		  introduce argumento se considera que el mensaje es "Payload "*/
 	while ((opt = getopt_long_only(argc, argv,"1:2:3:4:5:6:7", options, &long_index )) != -1) {
 		switch (opt) {
 
 			case '1' :
 
 				flag_iface = 1;
-				//Por comodidad definimos interface como una variable global
+				/*Por comodidad definimos interface como una variable global*/
 				sprintf(interface,"%s",optarg);
 				break;
 
 			case '2' :
 
 				flag_ip = 1;
-				//Leemos la IP a donde transmitir y la almacenamos en orden de red
+				/*Leemos la IP a donde transmitir y la almacenamos en orden de red*/
 				if (sscanf(optarg,"%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8"",
 				                   &(IP_destino_red[0]),&(IP_destino_red[1]),&(IP_destino_red[2]),&(IP_destino_red[3])) != IP_ALEN){
 					printf("Error: Fallo en la lectura IP destino %s\n", optarg);
@@ -81,31 +83,53 @@ int main(int argc, char **argv){
 			case '3' :
 
 				flag_port = 1;
-				//Leemos el puerto a donde transmitir y la almacenamos en orden de hardware
+				/*Leemos el puerto a donde transmitir y la almacenamos en orden de hardware*/
 				puerto_destino = atoi(optarg);
 				break;
 
 			case '4' :
 
 				if(strcmp(optarg,"stdin") == 0) {
-					if (fgets(data, sizeof data, stdin)==NULL) {
-						  	printf("Error leyendo desde stdin: %s %s %d.\n",errbuf,__FILE__,__LINE__);
+					if (fgets(data, sizeof data, stdin)== NULL) {
+						printf("Error leyendo desde stdin: %s %s %d.\n",errbuf,__FILE__,__LINE__);
 						return ERROR;
 					}
+					/*Comprobamos que sea par*/
+					if (strlen(data)%2 != 0){
+						sprintf(data, "%s", " ");
+					}
 					sprintf(fichero_pcap_destino,"%s%s","stdin",".pcap");
-				} else {
+				} 
+				else {
 					sprintf(fichero_pcap_destino,"%s%s",optarg,".pcap");
-					//TODO Leer fichero en data [...]
+					sprintf(data, "%s", "");
+					if((file = fopen(optarg, "r")) == NULL){
+						printf("Error abriendo fichero %s\n", optarg);
+						return ERROR;
+					}
+					while(!feof(file)){
+						if (fgets(aux, sizeof data, file)== NULL) { /*PREGUNTAR SI HAY QUE LEER MAS DE UNA LINEA Y SI HAY QUE CONTROLAR QUE SEA PAR*/
+							printf("Error leyendo desde file: %s %s %d.\n",errbuf, __FILE__, __LINE__);
+							fclose(file);
+							return ERROR;
+						}
+						strcat(data, aux);
+					}
+					/*Comprobamos que sea par*/
+					if (strlen(data)%2 != 0){
+						sprintf(data, "%s", " ");
+					}
+					fclose(file);
 				}
 				flag_file = 1;
 				break;
 
 			case '5' :
-				flag_dontfrag = 1; // El usuario solicita que los paquetes se envien con el bit DF=1.
+				flag_dontfrag = 1; /* El usuario solicita que los paquetes se envien con el bit DF=1.*/
 				break;
 
 			case '6' :
-				flag_mostrar = 1; // El usuario solicita que se muestren en hexadecimal las tramas enviadas.
+				flag_mostrar = 1; /* El usuario solicita que se muestren en hexadecimal las tramas enviadas.*/
 				break;
 
 			case '7' : printf("Ayuda. Ejecucion: %s -if interface -ip direccion_IP -pd puerto [-f /ruta/fichero_a_transmitir o stdin] [-d] [-m]: %d\n",argv[0],argc); exit(ERROR);
@@ -131,7 +155,7 @@ int main(int argc, char **argv){
 	}
 
 	if (flag_file == 0) {
-		sprintf(data,"%s","Payload "); //Deben ser pares!
+		sprintf(data,"%s","Payload "); /*Deben ser pares!*/
 		sprintf(fichero_pcap_destino,"%s%s","debugging",".pcap");
 	}
 
@@ -140,29 +164,30 @@ int main(int argc, char **argv){
 		return ERROR;
 	}
 
-	//Inicializamos las tablas de protocolos
+	/*Inicializamos las tablas de protocolos*/
 	if(inicializarPilaEnviar() == ERROR){
       	printf("Error leyendo desde stdin: %s %s %d.\n",errbuf,__FILE__,__LINE__);
 		return ERROR;
 	}
 
-	//Leemos el tamano maximo de transmision del nivel de enlace
+	/*Leemos el tamano maximo de transmision del nivel de enlace*/
 	if(obtenerMTUInterface(interface, &MTU) == ERROR)	return ERROR;
 
-	//Descriptor de la interface de red donde inyectar trafico
-	if ((descr = pcap_open_live(interface, MTU+ETH_HLEN, 0, 0, errbuf)) == NULL){
+	/*Descriptor de la interface de red donde inyectar trafico*/
+	if ((descr = pcap_open_live(interface, MTU + ETH_HLEN, 0, 0, errbuf)) == NULL){
 		printf("Error: pcap_open_live(): %s %s %d.\n", errbuf, __FILE__, __LINE__);
 		return ERROR;
 	}
 
-	datalink = (uint16_t)pcap_datalink(descr); //DLT_EN10MB==Ethernet
+	datalink = (uint16_t)pcap_datalink(descr); /*DLT_EN10MB==Ethernet*/
 
-	//Descriptor del fichero de salida pcap para debugging
+	/*Descriptor del fichero de salida pcap para debugging*/
 	descr2 = pcap_open_dead(datalink, MTU+ETH_HLEN);
 	pdumper = pcap_dump_open(descr2, fichero_pcap_destino);
 
-	//Formamos y enviamos el trafico, debe enviarse un unico segmento por llamada a enviar() aunque luego se traduzca en mas de un datagrama
-	//Primero, un paquete ICMP; en concreto, un ping
+	/*Formamos y enviamos el trafico, debe enviarse un unico segmento
+	  por llamada a enviar() aunque luego se traduzca en mas de un datagrama
+	  Primero, un paquete ICMP; en concreto, un ping*/
 	pila_protocolos[0] = ICMP_PROTO;
 	pila_protocolos[1] = IP_PROTO;
 	pila_protocolos[2] = ETH_PROTO;
@@ -179,14 +204,15 @@ int main(int argc, char **argv){
 	}
 	else	cont++;
 	printf("Enviado mensaje %"PRIu64", ICMP almacenado en %s\n\n", cont,fichero_pcap_destino);
+	
 
-	//Luego, un paquete UDP
-	//Definimos la pila de protocolos que queremos seguir
+	/*Luego, un paquete UDP
+	  Definimos la pila de protocolos que queremos seguir*/
 	pila_protocolos[0] = UDP_PROTO;
 	pila_protocolos[1] = IP_PROTO;
 	pila_protocolos[2] = ETH_PROTO;
 
-	//Rellenamos los parametros necesario para enviar el paquete a su destinatario y proceso
+	/*Rellenamos los parametros necesario para enviar el paquete a su destinatario y proceso*/
 	Parametros parametros_udp;
 	memcpy(parametros_udp.IP_destino, IP_destino_red,IP_ALEN);
 	parametros_udp.bit_DF = flag_dontfrag;
@@ -195,16 +221,16 @@ int main(int argc, char **argv){
   /*Aumentamos el identificador ip*/
 	ID++;
 
-	//Enviamos
-	if(enviar((uint8_t*)data,strlen(data),pila_protocolos,&parametros_udp)==ERROR ){
+	/*Enviamos*/
+	if(enviar((uint8_t*)data, strlen(data), pila_protocolos, &parametros_udp)==ERROR ){
 		printf("Error: enviar(): %s %s %d.\n",errbuf,__FILE__,__LINE__);
 		return ERROR;
 	}
 	else cont++;
 
 	printf("Enviado mensaje %"PRIu64", almacenado en %s\n\n\n", cont,fichero_pcap_destino);
-
-	//Cerramos descriptores
+	
+	/*Cerramos descriptores*/
 	pcap_close(descr);
 	pcap_dump_close(pdumper);
 	pcap_close(descr2);
@@ -238,7 +264,7 @@ uint8_t enviar(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos, v
 }
 
 
-/***************************TODO Pila de protocolos a implementar************************************/
+/*************************** Pila de protocolos a implementar************************************/
 
 
 /****************************************************************************************
@@ -259,46 +285,46 @@ uint8_t moduloICMP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolo
 	uint16_t aux16;
 	uint32_t pos = 0, checksum = 0, aux32;
 	uint8_t protocolo_inferior = pila_protocolos[1];
-	int i;
 
 	auxchecksum = (uint8_t*)malloc(sizeof(uint8_t)*2);
 
 	printf("modulo ICMP(%"PRIu16") %s %d.\n", protocolo_inferior, __FILE__, __LINE__);
 
 	aux8 = PING_TIPO;
-	memcpy(segmento+pos, &aux8, sizeof(uint8_t));
+	memcpy(segmento + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
-
+	
 	aux8 = PING_CODE;
-	memcpy(segmento+pos, &aux8, sizeof(uint8_t));
+	memcpy(segmento + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
+	
 	/*Puntero al checksum*/
 	checksum = pos;
 
 	/*Identificador*/
 	pos += sizeof(uint16_t);
-	aux32 = getpid();
-	memcpy(segmento+pos, &aux32, sizeof(uint16_t));
+	aux16 = getpid();
+	aux16 = htons(aux16);
+	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-
+	
 	/*Número de secuencia*/
-	aux16 = 1;
-	memcpy(segmento+pos, &aux16, sizeof(uint16_t));
+	aux16 = htons(1);
+	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-
+	
 	/*Datos*/
-	memcpy(segmento+pos, mensaje, longitud);
+	memcpy(segmento + pos, mensaje, longitud);
 	pos += longitud;
-
 
 	/*Checksum*/
 	calcularChecksum(segmento, pos, auxchecksum);
-	memcpy(segmento+checksum, auxchecksum, sizeof(uint16_t));
-
+	memcpy(segmento + checksum, auxchecksum, sizeof(uint16_t));
+	
 	free(auxchecksum);
 
-/*Se llama al protocolo definido de nivel inferior a traves de los punteros
- * registrados en la tabla de protocolos registrados*/
+	/*Se llama al protocolo definido de nivel inferior a traves de los punteros
+	 registrados en la tabla de protocolos registrados*/
 	return protocolos_registrados[protocolo_inferior](segmento, pos, pila_protocolos, parametros);
 }
 
@@ -315,11 +341,12 @@ uint8_t moduloICMP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolo
  ****************************************************************************************/
 
 uint8_t moduloUDP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos, void *parametros){
-	uint8_t segmento[UDP_SEG_MAX]={0};
-	uint16_t puerto_origen = 0, suma_control=0;
+	uint8_t segmento[UDP_SEG_MAX] = {0};
+	uint16_t puerto_origen = 0, suma_control = 0;
 	uint16_t aux16;
-	uint32_t pos=0;
-	uint8_t protocolo_inferior=pila_protocolos[1];
+	uint32_t pos = 0;
+	uint8_t protocolo_inferior = pila_protocolos[1];
+		
 	printf("modulo UDP(%"PRIu16") %s %d.\n",protocolo_inferior,__FILE__,__LINE__);
 
 	if (longitud > UDP_SEG_MAX){
@@ -327,20 +354,38 @@ uint8_t moduloUDP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos
 		return ERROR;
 	}
 
-	Parametros udpdatos=*((Parametros*)parametros);
-	uint16_t puerto_destino=udpdatos.puerto_destino;
+	Parametros udpdatos= *((Parametros*)parametros);
+	uint16_t puerto_destino = udpdatos.puerto_destino;
 
-//TODO
-//[...]
-//obtenerPuertoOrigen(...)
+	/*Obtenemos el puerto origen*/
+	if (obtenerPuertoOrigen(&puerto_origen) == ERROR){
+		printf("Error obtenerPuertoOrigen %d\n\n", __LINE__);
+		return ERROR;
+	}
+
 	aux16 = htons(puerto_origen);
-	memcpy(segmento+pos,&aux16,sizeof(uint16_t));
+	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
+	
+	/*Puerto Destino*/
+	aux16 = htons(puerto_destino);
+	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
+	pos += sizeof(uint16_t);
+	
+	/*Longitud*/
+	aux16 = htons(longitud + UDP_HLEN);
+	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
+	pos += sizeof(uint16_t);
+	
+	/*Checksum a 0*/
+	aux16 = 0;
+	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
+	pos += sizeof(uint16_t);
+	
+	/*Mensaje*/
+	memcpy(segmento + pos, mensaje, longitud);
 
-//TODO Completar el segmento [...]
-//[...]
-//Se llama al protocolo definido de nivel inferior a traves de los punteros registrados en la tabla de protocolos registrados
-	return protocolos_registrados[protocolo_inferior](segmento, longitud+pos, pila_protocolos, parametros);
+	return protocolos_registrados[protocolo_inferior](segmento, longitud + pos, pila_protocolos, parametros);
 }
 
 
@@ -362,84 +407,117 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 	uint8_t aux8;
 	uint32_t pos = 0, pos_control = 0, checksum = 0;
 	uint8_t IP_origen[IP_ALEN];
-	uint8_t protocolo_superior = pila_protocolos[0];
+	uint16_t protocolo_superior = pila_protocolos[0];
 	uint8_t protocolo_inferior = pila_protocolos[2];
 	pila_protocolos++;
-	uint8_t mascara[IP_ALEN], IP_rango_origen[IP_ALEN], IP_rango_destino[IP_ALEN];
-	uint8_t auxchecksum = (uint8_t*)malloc(sizeof(uint8_t)*2);
 	int i;
+	for(i = 0; i < 3; i++) printf("pila %04X\n", pila_protocolos[i]);
+	
+	uint8_t mascara[IP_ALEN], IP_rango_origen[IP_ALEN], IP_rango_destino[IP_ALEN], gateway[IP_ALEN];
+	uint8_t *auxchecksum = (uint8_t*)malloc(sizeof(uint8_t)*2);
 
 	printf("modulo IP(%"PRIu16") %s %d.\n", protocolo_inferior, __FILE__, __LINE__);
 
 	Parametros ipdatos = *((Parametros*)parametros);
 	uint8_t* IP_destino = ipdatos.IP_destino;
+	uint8_t ETH_destino[4];
 
-	if(solicitudARP(interface, IP__destino, ipdatos.ETH_destino) == ERROR) {
-		printf("Error Solicitud ARP\n");
+	/*Obtenemos la ip origen*/
+	if(obtenerIPInterface(interface, IP_origen) == ERROR){
+		printf("Error obtenerIPInterface %d\n", __LINE__);
 		return ERROR;
 	}
-
+	
+	/*Obtenemos la máscara*/
+	if(obtenerMascaraInterface(interface, mascara) == ERROR){
+		printf("Error obtenerMascaraInterface %d\n", __LINE__);
+		return ERROR;
+	}
+	
+	/*Aplicamos mascaras a la ip origen y destino y las comparamos*/
+	if(aplicarMascara(IP_origen, mascara, IP_ALEN, IP_rango_origen) == ERROR){
+		printf("Error aplicarMascara origen %d\n", __LINE__);
+		return ERROR;
+	}
+	
+	if(aplicarMascara(IP_destino, mascara, IP_ALEN, IP_rango_destino) == ERROR){
+		printf("Error aplicarMascara origen %d\n", __LINE__);
+		return ERROR;
+	}
+	
+	if (memcmp(IP_rango_destino, IP_rango_origen, IP_ALEN) == 0) {
+		
+		/*Solicitud ARP*/
+		if(solicitudARP(interface, IP_destino, ipdatos.ETH_destino) == ERROR) {
+			printf("Error Solicitud ARP\n");
+			return ERROR;
+		}
+	}
+	/*Solicitamos gateway*/
+	else{
+		if (obtenerGateway(interface, gateway) == ERROR){
+			printf("Error obtenerGatway %d", __LINE__);
+			return ERROR;
+		}
+		if(solicitudARP(interface, gateway, ipdatos.ETH_destino) == ERROR) {
+			printf("Error Solicitud ARP\n");
+			return ERROR;
+		}
+	}
+	
 	/*Versión IP y IHL*/
 	aux8 = 0x45;
-	memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
+	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
 	/*Tipo de Servicio*/
 	aux8 = 0;
-	memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
+	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
-  /*Longitud total*/
-	aux16 = 20 + longitud;
-	memcpy(datagrama+pos, &aux16, sizeof(uint16_t));
+    /*Longitud total*/
+	aux16 = (uint16_t) (20 + longitud);
+	aux16 = htons(aux16);
+	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
 
 	/*Identifcación*/
-	aux16 = ID;
-	memcpy(datagrama+pos, &aux16, sizeof(uint16_t));
+	aux16 = htons(ID);
+	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
 
-	/*Flags y offset ACABA ESTA MIERDA DE IP DE MIKEL*/
+	/*Flags y offset ACABA ESTA MIERDA DE IP DE MIKELlllllllllllllllllllllllll*/
 	aux16 = 0;
-	memcpy(datagrama+pos, &aux16, sizeof(uint16_t));
+	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
 
 	/*Tiempo de vida*/
 	aux8 = 128;
-	memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
+	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
 	/*Protocolo*/
-	aux8 = *pila_protocolos;
-	memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
+	aux8 = (uint8_t) protocolo_superior;
+	printf("pttttttttttttt %02X\n", protocolo_superior);
+	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
 	/*Checksum al final, direccion origen y destino*/
 	checksum = pos;
 	pos += sizeof(uint16_t);
 
-	if(obtenerIPInterface(interface, IP_origen) == ERROR) return ERROR;
-	for(i = 0; i < IP_ALEN; i++) {
-		aux8 = IP_origen[i]
-		memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
-		pos += sizeof(uint8_t);
-	}
-	for(i = 0; i < IP_ALEN; i++) {
-		aux8 = IP_destino[i]
-		memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
-		pos += sizeof(uint8_t);
-	}
+	memcpy(datagrama + pos, IP_origen, IP_ALEN);
+	pos += IP_ALEN;
+	memcpy(datagrama + pos, IP_destino, IP_ALEN);
+	pos += IP_ALEN;
 
 	/*Checksum*/
 	calcularChecksum(datagrama, pos, auxchecksum);
-	memcpy(datagrama+checksum, auxchecksum, sizeof(uint16_t));
+	memcpy(datagrama + checksum, auxchecksum, sizeof(uint16_t));
 	free(auxchecksum);
 
 	/*Agregamos segmento*/
-	for(i = pos; i < longitud+pos; i++){
-		aux8 = segmento[i-pos];
-		memcpy(datagrama+i, &aux8, sizeof(uint8_t));
-	}
+	memcpy(datagrama + pos, segmento, longitud);
 
   return protocolos_registrados[protocolo_inferior](datagrama, longitud+pos, pila_protocolos, parametros);
 }
@@ -457,34 +535,56 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
  ****************************************************************************************/
 
 uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocolos,void *parametros){
-//TODO
-//[....]
-//[...] Variables del modulo
-uint8_t aux8;
-uint32_t pos = 0,
-uint8_t trama[ETH_FRAME_MAX]={0};
-uint8_t mac_origen[ETH_HLEN];
-Parametros ipdatos = *((Parametros*)parametros);
-int i;
+	uint8_t aux8;
+	uint16_t aux16, mtu;
+	uint32_t pos = 0;
+	uint8_t trama[ETH_FRAME_MAX]={0};
+	uint8_t eth_origen[ETH_HLEN];
+	Parametros ipdatos = *((Parametros*)parametros);
+	uint8_t* eth_destino = ipdatos.ETH_destino;
+	uint8_t protocolo_superior = pila_protocolos[0];
+	struct pcap_pkthdr cabecera;
+	struct timeval time;
 
-printf("modulo ETH(fisica) %s %d.\n",__FILE__,__LINE__);
+	printf("modulo ETH(fisica) %s %d.\n",__FILE__,__LINE__);
 
-if (obtenerMACdeInterface(interface, mac_origen) == ERROR) return ERROR;
-for(i = 0; i < ETH_ALEN; i++) {
-	aux8 = mac_origen[i];
-	memcpy(datagrama+pos, &aux8, sizeof(uint8_t));
-	pos += sizeof(uint8_t);
-}
-//TODO
-//[...] Control de tamano mtu > long err
+	/*Comprobamos que el tamano de longitud no sea mayor que mtu*/
+	if(obtenerMTUInterface(interface, &mtu) == ERROR) return ERROR;
+	if(mtu < longitud){
+		printf("Error moduloETH: tamaño del datagrama supera el mtu\n");
+		return ERROR;
+	}
 
-//TODO
-//[...] Cabecera del modulo
+	/*Direccion ethernet destino*/
+	memcpy(trama, eth_destino, ETH_ALEN);
+	pos += ETH_ALEN;
 
-//TODO
-//Enviar a capa fisica [...]
-//TODO
-//Almacenamos la salida por cuestiones de debugging [...]
+	/*Direccion ethernet origen*/
+	if (obtenerMACdeInterface(interface, eth_origen) == ERROR) return ERROR;
+	memcpy(trama + pos, eth_origen, ETH_ALEN);
+	pos += ETH_ALEN;
+
+	/*Tipo Ethernet*/
+	aux16 = htons(protocolo_superior);
+	memcpy(trama + pos, &aux16, sizeof(uint16_t));
+	pos += sizeof(uint16_t);
+
+	/*Agregamos datagrama*/
+	memcpy(trama + pos, datagrama, longitud);
+
+	/*Enviamos a capa física*/
+	if (pcap_inject(descr, trama, ETH_HLEN + longitud) == ERROR){
+		printf("Error moduloETH: pcap_inject returns PCAP_ERROR\n");
+		return ERROR;
+	}
+
+	/*Completamos cabecera y hacemos el pcap_dump*/
+	gettimeofday(&time,NULL);
+	cabecera.ts = time;
+	cabecera.len = longitud + ETH_HLEN;
+	cabecera.caplen = longitud + ETH_HLEN;
+
+	if(pdumper) pcap_dump((uint8_t*)pdumper, &cabecera, trama);
 
 	return OK;
 }
@@ -505,9 +605,15 @@ for(i = 0; i < ETH_ALEN; i++) {
  ****************************************************************************************/
 
 uint8_t aplicarMascara(uint8_t* IP, uint8_t* mascara, uint8_t longitud, uint8_t* resultado){
-//TODO
-//[...]
-}
+	uint32_t i;
+	
+	if(!IP || !mascara || longitud < 0 || !resultado) return ERROR;
+	
+	for(i = 0; i < longitud; i++){
+		resultado[i] = IP[i] & mascara[i];
+	}
+	return OK;
+	}
 
 
 /***************************Funciones auxiliares implementadas**************************************/
@@ -524,7 +630,7 @@ uint8_t aplicarMascara(uint8_t* IP, uint8_t* mascara, uint8_t longitud, uint8_t*
 uint8_t mostrarHex(uint8_t * datos, uint32_t longitud){
 	uint32_t i;
 	printf("Datos:\n");
-	for (i=0;i<longitud;i++){
+	for (i = 0; i < longitud; i++){
 		printf("%02"PRIx8" ", datos[i]);
 	}
 	printf("\n");
@@ -546,17 +652,17 @@ uint8_t calcularChecksum(uint8_t *datos, uint16_t longitud, uint8_t *checksum) {
     uint16_t word16;
     uint32_t sum = 0;
     int i;
-    // make 16 bit words out of every two adjacent 8 bit words in the packet
-    // and add them up
+    /* make 16 bit words out of every two adjacent 8 bit words in the packet
+       and add them up*/
     for (i = 0; i < longitud; i += 2){
         word16 = (datos[i] << 8) + datos[i+1];
         sum += (uint32_t)word16;
     }
-    // take only 16 bits out of the 32 bit sum and add up the carries
+    /*take only 16 bits out of the 32 bit sum and add up the carries*/
     while (sum >> 16) {
         sum = (sum & 0xFFFF)+(sum >> 16);
     }
-    // one's complement the result
+    /* one's complement the result*/
     sum =  ~sum;
     checksum[0] = sum >> 8;
     checksum[1] = sum & 0xFF;
