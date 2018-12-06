@@ -99,7 +99,7 @@ int main(int argc, char **argv){
 						sprintf(data, "%s", " ");
 					}
 					sprintf(fichero_pcap_destino,"%s%s","stdin",".pcap");
-				} 
+				}
 				else {
 					sprintf(fichero_pcap_destino,"%s%s",optarg,".pcap");
 					sprintf(data, "%s", "");
@@ -204,7 +204,7 @@ int main(int argc, char **argv){
 	}
 	else	cont++;
 	printf("Enviado mensaje %"PRIu64", ICMP almacenado en %s\n\n", cont,fichero_pcap_destino);
-	
+
 
 	/*Luego, un paquete UDP
 	  Definimos la pila de protocolos que queremos seguir*/
@@ -229,7 +229,7 @@ int main(int argc, char **argv){
 	else cont++;
 
 	printf("Enviado mensaje %"PRIu64", almacenado en %s\n\n\n", cont,fichero_pcap_destino);
-	
+
 	/*Cerramos descriptores*/
 	pcap_close(descr);
 	pcap_dump_close(pdumper);
@@ -281,47 +281,51 @@ uint8_t enviar(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos, v
 uint8_t moduloICMP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos, void *parametros){
 	uint8_t segmento[ICMP_DATAGRAM_MAX] = {0};
 	uint8_t aux8;
-	uint8_t *auxchecksum;
+	uint8_t auxchecksum[2];
 	uint16_t aux16;
 	uint32_t pos = 0, checksum = 0, aux32;
 	uint8_t protocolo_inferior = pila_protocolos[1];
 
-	auxchecksum = (uint8_t*)malloc(sizeof(uint8_t)*2);
+
 
 	printf("modulo ICMP(%"PRIu16") %s %d.\n", protocolo_inferior, __FILE__, __LINE__);
 
+	/*Tipo y Código*/
 	aux8 = PING_TIPO;
 	memcpy(segmento + pos, &aux8, sizeof(uint8_t));
-	pos += sizeof(uint8_t);
-	
+	pos = sizeof(uint8_t);
+
 	aux8 = PING_CODE;
 	memcpy(segmento + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
-	
+
 	/*Puntero al checksum*/
 	checksum = pos;
+	pos += sizeof(uint16_t);
 
 	/*Identificador*/
-	pos += sizeof(uint16_t);
 	aux16 = getpid();
 	aux16 = htons(aux16);
 	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-	
+
 	/*Número de secuencia*/
 	aux16 = htons(1);
 	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-	
+
 	/*Datos*/
-	memcpy(segmento + pos, mensaje, longitud);
+	if(longitud < (ICMP_DATAGRAM_MAX - ICMP_HLEN)){
+		memcpy(segmento + pos, mensaje, longitud);
+	}
+	else{ /*Truncamos el mensaje*/
+		memcpy(segmento + pos, mensaje, ICMP_DATAGRAM_MAX - ICMP_HLEN);
+	}
 	pos += longitud;
 
 	/*Checksum*/
 	calcularChecksum(segmento, pos, auxchecksum);
 	memcpy(segmento + checksum, auxchecksum, sizeof(uint16_t));
-	
-	free(auxchecksum);
 
 	/*Se llama al protocolo definido de nivel inferior a traves de los punteros
 	 registrados en la tabla de protocolos registrados*/
@@ -346,7 +350,7 @@ uint8_t moduloUDP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos
 	uint16_t aux16;
 	uint32_t pos = 0;
 	uint8_t protocolo_inferior = pila_protocolos[1];
-		
+
 	printf("modulo UDP(%"PRIu16") %s %d.\n",protocolo_inferior,__FILE__,__LINE__);
 
 	if (longitud > UDP_SEG_MAX){
@@ -366,22 +370,22 @@ uint8_t moduloUDP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos
 	aux16 = htons(puerto_origen);
 	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-	
+
 	/*Puerto Destino*/
 	aux16 = htons(puerto_destino);
 	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-	
+
 	/*Longitud*/
 	aux16 = htons(longitud + UDP_HLEN);
 	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-	
+
 	/*Checksum a 0*/
 	aux16 = 0;
 	memcpy(segmento + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
-	
+
 	/*Mensaje*/
 	memcpy(segmento + pos, mensaje, longitud);
 
@@ -412,7 +416,7 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 	pila_protocolos++;
 	int i;
 	for(i = 0; i < 3; i++) printf("pila %04X\n", pila_protocolos[i]);
-	
+
 	uint8_t mascara[IP_ALEN], IP_rango_origen[IP_ALEN], IP_rango_destino[IP_ALEN], gateway[IP_ALEN];
 	uint8_t *auxchecksum = (uint8_t*)malloc(sizeof(uint8_t)*2);
 
@@ -427,26 +431,26 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 		printf("Error obtenerIPInterface %d\n", __LINE__);
 		return ERROR;
 	}
-	
+
 	/*Obtenemos la máscara*/
 	if(obtenerMascaraInterface(interface, mascara) == ERROR){
 		printf("Error obtenerMascaraInterface %d\n", __LINE__);
 		return ERROR;
 	}
-	
+
 	/*Aplicamos mascaras a la ip origen y destino y las comparamos*/
 	if(aplicarMascara(IP_origen, mascara, IP_ALEN, IP_rango_origen) == ERROR){
 		printf("Error aplicarMascara origen %d\n", __LINE__);
 		return ERROR;
 	}
-	
+
 	if(aplicarMascara(IP_destino, mascara, IP_ALEN, IP_rango_destino) == ERROR){
 		printf("Error aplicarMascara origen %d\n", __LINE__);
 		return ERROR;
 	}
-	
+
 	if (memcmp(IP_rango_destino, IP_rango_origen, IP_ALEN) == 0) {
-		
+
 		/*Solicitud ARP*/
 		if(solicitudARP(interface, IP_destino, ipdatos.ETH_destino) == ERROR) {
 			printf("Error Solicitud ARP\n");
@@ -464,13 +468,13 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 			return ERROR;
 		}
 	}
-	
+
 	/*Versión IP y IHL*/
 	aux8 = 0x45;
-	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
+	memcpy(datagrama, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
-	/*Tipo de Servicio*/
+	/*Tipo de Servicio a 0*/
 	aux8 = 0;
 	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
@@ -482,7 +486,7 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 	pos += sizeof(uint16_t);
 
 	/*Identifcación*/
-	aux16 = htons(ID);
+	aux16 = htons((uint16_t)ID);
 	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
 
@@ -502,10 +506,11 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
-	/*Checksum al final, direccion origen y destino*/
+	/*Checksum al final*/
 	checksum = pos;
 	pos += sizeof(uint16_t);
 
+	/*Direccion origen y destino*/
 	memcpy(datagrama + pos, IP_origen, IP_ALEN);
 	pos += IP_ALEN;
 	memcpy(datagrama + pos, IP_destino, IP_ALEN);
@@ -606,9 +611,9 @@ uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocol
 
 uint8_t aplicarMascara(uint8_t* IP, uint8_t* mascara, uint8_t longitud, uint8_t* resultado){
 	uint32_t i;
-	
+
 	if(!IP || !mascara || longitud < 0 || !resultado) return ERROR;
-	
+
 	for(i = 0; i < longitud; i++){
 		resultado[i] = IP[i] & mascara[i];
 	}
