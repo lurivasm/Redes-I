@@ -36,7 +36,7 @@ int main(int argc, char **argv){
 	uint16_t MTU;
 	uint16_t datalink;
 	uint16_t puerto_destino;
-	char data[IP_DATAGRAM_MAX], aux[IP_DATAGRAM_MAX];
+	char data[IP_DATAGRAM_MAX];
 	uint16_t pila_protocolos[CADENAS];
 
 
@@ -102,19 +102,12 @@ int main(int argc, char **argv){
 				}
 				else {
 					sprintf(fichero_pcap_destino,"%s%s",optarg,".pcap");
-					sprintf(data, "%s", "");
 					if((file = fopen(optarg, "r")) == NULL){
 						printf("Error abriendo fichero %s\n", optarg);
 						return ERROR;
 					}
-					while(!feof(file)){
-						if (fgets(aux, sizeof data, file)== NULL) { /*PREGUNTAR SI HAY QUE LEER MAS DE UNA LINEA Y SI HAY QUE CONTROLAR QUE SEA PAR*/
-							printf("Error leyendo desde file: %s %s %d.\n",errbuf, __FILE__, __LINE__);
-							fclose(file);
-							return ERROR;
-						}
-						strcat(data, aux);
-					}
+					fread(data, sizeof data, 1, file);
+					
 					/*Comprobamos que sea par*/
 					if (strlen(data)%2 != 0){
 						sprintf(data, "%s", " ");
@@ -190,7 +183,7 @@ int main(int argc, char **argv){
 	  Primero, un paquete ICMP; en concreto, un ping*/
 	pila_protocolos[0] = ICMP_PROTO;
 	pila_protocolos[1] = IP_PROTO;
-	pila_protocolos[2] = ETH_PROTO;
+	pila_protocolos[2] = 0;
 
 	Parametros parametros_icmp;
 	parametros_icmp.tipo = PING_TIPO;
@@ -283,9 +276,8 @@ uint8_t moduloICMP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolo
 	uint8_t aux8;
 	uint8_t auxchecksum[2];
 	uint16_t aux16;
-	uint32_t pos = 0, checksum = 0, aux32;
+	uint32_t pos = 0, checksum = 0;
 	uint8_t protocolo_inferior = pila_protocolos[1];
-
 
 
 	printf("modulo ICMP(%"PRIu16") %s %d.\n", protocolo_inferior, __FILE__, __LINE__);
@@ -346,8 +338,7 @@ uint8_t moduloICMP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolo
 
 uint8_t moduloUDP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos, void *parametros){
 	uint8_t segmento[UDP_SEG_MAX] = {0};
-	uint16_t puerto_origen = 0, suma_control = 0;
-	uint16_t aux16;
+	uint16_t puerto_origen = 0, aux16;
 	uint32_t pos = 0;
 	uint8_t protocolo_inferior = pila_protocolos[1];
 
@@ -406,25 +397,27 @@ uint8_t moduloUDP(uint8_t* mensaje, uint32_t longitud, uint16_t* pila_protocolos
 
 uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos, void *parametros){
 	uint8_t datagrama[IP_DATAGRAM_MAX] = {0};
-	uint32_t aux32;
-	uint16_t aux16;
+	uint16_t aux16, flags, long_data, mtu;
+	uint64_t longitud_paquete;
 	uint8_t aux8;
-	uint32_t pos = 0, pos_control = 0, checksum = 0;
+	uint32_t pos = 0, pos_offset = 0, pos_checksum = 0, pos_len = 0;
 	uint8_t IP_origen[IP_ALEN];
 	uint16_t protocolo_superior = pila_protocolos[0];
 	uint8_t protocolo_inferior = pila_protocolos[2];
 	pila_protocolos++;
-	int i;
-	for(i = 0; i < 3; i++) printf("pila %04X\n", pila_protocolos[i]);
-
+	
+	int i, num_frag;
+	
 	uint8_t mascara[IP_ALEN], IP_rango_origen[IP_ALEN], IP_rango_destino[IP_ALEN], gateway[IP_ALEN];
-	uint8_t *auxchecksum = (uint8_t*)malloc(sizeof(uint8_t)*2);
+	uint8_t auxchecksum[2];
 
 	printf("modulo IP(%"PRIu16") %s %d.\n", protocolo_inferior, __FILE__, __LINE__);
 
 	Parametros ipdatos = *((Parametros*)parametros);
 	uint8_t* IP_destino = ipdatos.IP_destino;
-	uint8_t ETH_destino[4];
+	
+	/*Obtenemos mtu*/
+	if(obtenerMTUInterface(interface, &mtu) == ERROR) return ERROR;
 
 	/*Obtenemos la ip origen*/
 	if(obtenerIPInterface(interface, IP_origen) == ERROR){
@@ -468,21 +461,17 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 			return ERROR;
 		}
 	}
-
+	
 	/*Versión IP y IHL*/
 	aux8 = 0x45;
 	memcpy(datagrama, &aux8, sizeof(uint8_t));
-	pos += sizeof(uint8_t);
+	pos = sizeof(uint8_t);
 
 	/*Tipo de Servicio a 0*/
-	aux8 = 0;
-	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
     /*Longitud total*/
-	aux16 = (uint16_t) (20 + longitud);
-	aux16 = htons(aux16);
-	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
+	pos_len = pos;
 	pos += sizeof(uint16_t);
 
 	/*Identifcación*/
@@ -490,9 +479,8 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
 
-	/*Flags y offset ACABA ESTA MIERDA DE IP DE MIKELlllllllllllllllllllllllll*/
-	aux16 = 0;
-	memcpy(datagrama + pos, &aux16, sizeof(uint16_t));
+	/*Flags y offset*/
+	pos_offset = pos;
 	pos += sizeof(uint16_t);
 
 	/*Tiempo de vida*/
@@ -502,12 +490,11 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 
 	/*Protocolo*/
 	aux8 = (uint8_t) protocolo_superior;
-	printf("pttttttttttttt %02X\n", protocolo_superior);
 	memcpy(datagrama + pos, &aux8, sizeof(uint8_t));
 	pos += sizeof(uint8_t);
 
 	/*Checksum al final*/
-	checksum = pos;
+	pos_checksum = pos;
 	pos += sizeof(uint16_t);
 
 	/*Direccion origen y destino*/
@@ -516,15 +503,69 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 	memcpy(datagrama + pos, IP_destino, IP_ALEN);
 	pos += IP_ALEN;
 
-	/*Checksum*/
-	calcularChecksum(datagrama, pos, auxchecksum);
-	memcpy(datagrama + checksum, auxchecksum, sizeof(uint16_t));
-	free(auxchecksum);
 
-	/*Agregamos segmento*/
-	memcpy(datagrama + pos, segmento, longitud);
+	long_data = mtu - IP_HLEN;
+	num_frag = ceil(longitud / (1.0*long_data));
 
-  return protocolos_registrados[protocolo_inferior](datagrama, longitud+pos, pila_protocolos, parametros);
+	/*Fragmentacion*/
+	if(ipdatos.bit_DF == 0){
+
+		for(i = 0; i < num_frag; i++){
+
+			if(i == num_frag - 1){ /*Último frgamento*/
+				flags = 0x0000;
+				longitud_paquete = longitud - i*long_data;
+			}
+			/*Resto de casos*/
+			else{
+				flags = 0x2000;
+				longitud_paquete = long_data;
+			}
+
+			/*Longitud Total*/
+			aux16 = htons(longitud_paquete + IP_HLEN);
+			memcpy(datagrama + pos_len, &aux16, sizeof(uint16_t));
+
+			/*Flags y offset (multiplo de 8B)*/
+			aux16 = htons(flags | (i*(long_data >> 3)));
+			memcpy(datagrama + pos_offset, &aux16, sizeof(uint16_t));
+
+			/*Checksum*/
+			memset(datagrama + pos_checksum, 0, sizeof(uint16_t)); 
+			calcularChecksum(datagrama, pos, auxchecksum);
+			memcpy(datagrama + pos_checksum, auxchecksum, sizeof(uint16_t));
+
+			/*Agregamos segmento*/
+			memcpy(datagrama + pos, segmento, longitud_paquete);
+			segmento += longitud_paquete;
+			
+			if(protocolos_registrados[protocolo_inferior](datagrama, longitud_paquete + IP_HLEN, pila_protocolos, parametros) == ERROR){
+				printf("Error protocolos_registrados moduloIP (%d)\n", __LINE__);
+				return ERROR;
+			}
+		}
+		return OK;
+	}
+	else{ /*Sin fragmentación*/
+
+		/*Longitud Total*/
+		aux16 = htons(longitud + IP_HLEN);
+		memcpy(datagrama + pos_len, &aux16, sizeof(uint16_t));
+
+		/*Flags y offset*/
+		aux16 = 0;
+		memcpy(datagrama + pos_offset, &aux16, sizeof(uint16_t));
+
+		/*Checksum*/
+		calcularChecksum(datagrama, pos, auxchecksum);
+		memcpy(datagrama + pos_checksum, auxchecksum, sizeof(uint16_t));
+	
+		/*Agregamos segmento*/
+		memcpy(datagrama + pos, segmento, longitud);
+
+	}
+
+  return protocolos_registrados[protocolo_inferior](datagrama, longitud + pos, pila_protocolos, &ipdatos);
 }
 
 
@@ -540,14 +581,13 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
  ****************************************************************************************/
 
 uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocolos,void *parametros){
-	uint8_t aux8;
 	uint16_t aux16, mtu;
 	uint32_t pos = 0;
 	uint8_t trama[ETH_FRAME_MAX]={0};
 	uint8_t eth_origen[ETH_HLEN];
-	Parametros ipdatos = *((Parametros*)parametros);
-	uint8_t* eth_destino = ipdatos.ETH_destino;
-	uint8_t protocolo_superior = pila_protocolos[0];
+	
+	Parametros ethdatos = *((Parametros*)parametros);
+	uint8_t* eth_destino = ethdatos.ETH_destino;
 	struct pcap_pkthdr cabecera;
 	struct timeval time;
 
@@ -555,11 +595,12 @@ uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocol
 
 	/*Comprobamos que el tamano de longitud no sea mayor que mtu*/
 	if(obtenerMTUInterface(interface, &mtu) == ERROR) return ERROR;
+	printf("longitud mtu %d %d\n\n", longitud, mtu);
 	if(mtu < longitud){
 		printf("Error moduloETH: tamaño del datagrama supera el mtu\n");
 		return ERROR;
 	}
-
+	
 	/*Direccion ethernet destino*/
 	memcpy(trama, eth_destino, ETH_ALEN);
 	pos += ETH_ALEN;
@@ -570,7 +611,7 @@ uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocol
 	pos += ETH_ALEN;
 
 	/*Tipo Ethernet*/
-	aux16 = htons(protocolo_superior);
+	aux16 = htons(0x0800);
 	memcpy(trama + pos, &aux16, sizeof(uint16_t));
 	pos += sizeof(uint16_t);
 

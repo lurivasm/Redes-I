@@ -3,7 +3,7 @@
  Definiciones y cabeceras para practica4.c
 
  Autor: Jose Luis Garcia Dorado, Jorge E. Lopez de Vergara Mendez
- 2018 EPS-UAM 
+ 2018 EPS-UAM
 ***************************************************************************/
 
 #ifndef __P4_H
@@ -32,17 +32,18 @@
 #include <math.h>
 
 /***************************Definicion de constantes************************************/
-#define ETH_ALEN 6			// Tamano de direccion ethernet     	
-#define ETH_HLEN 14			// Tamano de cabecera ethernet             
-#define ETH_TLEN 2			// Tamano del campo tipo ethernet          
-#define ETH_FRAME_MAX 1514	// Tamano maximo trama ethernet   	
+#define ETH_ALEN 6			// Tamano de direccion ethernet
+#define ETH_HLEN 14			// Tamano de cabecera ethernet
+#define ETH_TLEN 2			// Tamano del campo tipo ethernet
+#define ETH_FRAME_MAX 1514	// Tamano maximo trama ethernet
 #define ETH_PROTO 0			// Capa de enlace relativa al interface, le asignamos arbitrariamente el 0
 
 #define IP_ALEN 4			// Tamano de direccion IP
-#define IP_DATAGRAM_MAX 65535	// Tamano maximo datagrama IP 
-#define IP_PROTO 4		// Identificador protocolo IP	
+#define IP_DATAGRAM_MAX 65535	// Tamano maximo datagrama IP
+#define IP_PROTO 4		// Identificador protocolo IP
+#define IP_HLEN 20    // tamano cabecera IP
 
-#define UDP_HLEN 8			// Tamano de cabecera UDP	
+#define UDP_HLEN 8			// Tamano de cabecera UDP
 #define UDP_SEG_MAX 65507	// Tamano maximo datos segmento UDP
 #define UDP_PROTO 17		// Identificador protocolo UDP
 
