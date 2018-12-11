@@ -20,6 +20,7 @@ pcap_dumper_t * pdumper;/*y salida a pcap*/
 uint64_t cont = 0;	/*Contador numero de mensajes enviados*/
 char interface[10];	/*Interface donde transmitir por ejemplo "eth0"*/
 uint16_t ID = 1;		/*Identificador IP*/
+char flag_mostrar = 0;  /*Flag para mostrar los datos en hexadecimal*/
 
 
 void handleSignal(int nsignal){
@@ -42,7 +43,7 @@ int main(int argc, char **argv){
 
 	int long_index = 0;
 	char opt;
-	char flag_iface = 0, flag_ip = 0, flag_port = 0, flag_file = 0, flag_dontfrag = 0, flag_mostrar = 0;
+	char flag_iface = 0, flag_ip = 0, flag_port = 0, flag_file = 0, flag_dontfrag = 0;
 	FILE *file = NULL;
 
 	static struct option options[] = {
@@ -539,7 +540,7 @@ uint8_t moduloIP(uint8_t* segmento, uint32_t longitud, uint16_t* pila_protocolos
 			memcpy(datagrama + pos, segmento, longitud_paquete);
 			segmento += longitud_paquete;
 			
-			if(protocolos_registrados[protocolo_inferior](datagrama, longitud_paquete + IP_HLEN, pila_protocolos, parametros) == ERROR){
+			if(protocolos_registrados[protocolo_inferior](datagrama, longitud_paquete + IP_HLEN, pila_protocolos, &ipdatos) == ERROR){
 				printf("Error protocolos_registrados moduloIP (%d)\n", __LINE__);
 				return ERROR;
 			}
@@ -595,7 +596,7 @@ uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocol
 
 	/*Comprobamos que el tamano de longitud no sea mayor que mtu*/
 	if(obtenerMTUInterface(interface, &mtu) == ERROR) return ERROR;
-	printf("longitud mtu %d %d\n\n", longitud, mtu);
+	
 	if(mtu < longitud){
 		printf("Error moduloETH: tamaño del datagrama supera el mtu\n");
 		return ERROR;
@@ -617,6 +618,11 @@ uint8_t moduloETH(uint8_t* datagrama, uint32_t longitud, uint16_t* pila_protocol
 
 	/*Agregamos datagrama*/
 	memcpy(trama + pos, datagrama, longitud);
+	
+	/*Comprobamos que el flag de mostrar esta activado*/
+	if(flag_mostrar == 1){
+		mostrarHex(trama, pos + longitud);
+	}	
 
 	/*Enviamos a capa física*/
 	if (pcap_inject(descr, trama, ETH_HLEN + longitud) == ERROR){
